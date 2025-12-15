@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>冰箱小管家</title>
+    <style>
+      /* --- 基礎樣式 --- */
+      body { font-family: sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+      
+      /* --- 登入畫面 --- */
+      #loginOverlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: #f4f7f6; z-index: 9999;
+        display: flex; justify-content: center; align-items: center; flex-direction: column;
+      }
+      .login-box {
+        background: white; padding: 40px; border-radius: 15px; width: 85%; max-width: 320px;
+        text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      }
+      .login-title { font-size: 24px; font-weight: bold; margin-bottom: 20px; color: #3498db; }
+      
+      .login-input {
+        width: 100%; padding: 15px; margin-bottom: 20px; box-sizing: border-box;
+        border: 2px solid #ccc; border-radius: 8px; font-size: 20px; text-align: center;
+        text-transform: uppercase; font-weight: bold;
+      }
+      
+      .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 10px; }
+      .btn-blue { background-color: #3498db; color: white; }
+      .btn-white { background-color: white; color: #3498db; border: 2px dashed #3498db; }
+      .btn-blue:disabled, .btn-white:disabled { background-color: #ccc; border-color: #ccc; color: #666; cursor: not-allowed; }
+
+      /* --- 主程式畫面 --- */
+      #appContainer { display: none; }
+      .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 15px; }
+      
+      .header-area { text-align: center; margin-bottom: 20px; position: relative; }
+      .code-badge { background: #eee; padding: 5px 10px; border-radius: 15px; font-size: 14px; display: inline-block; font-weight: bold; cursor: pointer;}
+      .logout-btn { position: absolute; right: 0; top: 0; font-size: 13px; color: red; cursor: pointer; background: #fff0f0; padding: 5px 10px; border-radius: 5px; }
+
+      input.app-input { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+      /* 🔍 搜尋框樣式 */
+      input.search-input { width: 100%; padding: 12px; margin-bottom: 20px; border: 2px solid #3498db; border-radius: 30px; box-sizing: border-box; font-size: 16px; background-color: #f0f8ff; color: #333; }
+      input.search-input::placeholder { color: #88a; }
+
+      .btn-row { display: flex; gap: 10px; margin-bottom: 15px;}
+      
+      .card { border: 1px solid #eee; padding: 10px; margin-bottom: 10px; border-radius: 8px; display: flex; align-items: center; }
+      .card-img { width: 60px; height: 60px; background: #eee; border-radius: 5px; margin-right: 15px; object-fit: cover; }
+      .card-info { flex: 1; }
+      .tag { font-size: 12px; padding: 2px 6px; border-radius: 4px; color: white; margin-top: 5px; display: inline-block; }
+      .bg-red { background: #e74c3c; } .bg-yellow { background: #f39c12; } .bg-green { background: #2ecc71; }
+      
+      /* 系統狀態燈 */
+      #systemStatus { position: fixed; bottom: 10px; right: 10px; font-size: 12px; background: white; padding: 5px 10px; border-radius: 20px; border: 1px solid #ccc; color: red; }
+    </style>
+  </head>
+  <body>
+
+    <div id="loginOverlay">
+      <div class="login-box">
+        <div class="login-title">🧊 冰箱小管家</div>
+        <p>只能使用系統產生的代碼登入</p>
+        
+        <input type="text" id="spaceCodeInput" class="login-input" placeholder="輸入代碼">
+        
+        <button id="btnLogin" class="btn btn-blue" onclick="processLogin()">🚀 登入空間</button>
+        <button id="btnCreate" class="btn btn-white" onclick="processRegister()">🎲 產生新代碼</button>
+      </div>
+    </div>
+
+    <div id="appContainer">
+      <div class="container">
+        <div class="header-area">
+          <h3>我的冰箱</h3>
+          <div class="code-badge" onclick="copyCode()">代碼: <span id="displayCode"></span> (點此複製)</div>
+          <div class="logout-btn" onclick="logout()">登出</div>
+        </div>
+        
+        <input type="text" id="inName" class="app-input" placeholder="🍎 名稱">
+        <input type="text" id="inLoc" class="app-input" placeholder="🧊 位置 (例如: 冰箱)">
+        <input type="date" id="inDate" class="app-input">
+        
+        <div id="previewBox" style="display:none; text-align:center;">
+           <img id="imgPreview" src="" style="height:80px; border-radius:5px;">
+           <div style="font-size:12px; color:#aaa;">已選圖</div>
+        </div>
+
+        <div class="btn-row">
+          <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileSelect()">
+          <button class="btn btn-blue" style="background:#f39c12;" onclick="document.getElementById('fileInput').click()">📷 拍照</button>
+          <button class="btn btn-blue" style="background:#2ecc71;" onclick="saveData()">🚀 加入</button>
+        </div>
+        
+        <div id="statusLog" style="text-align:center; color:blue; margin:5px 0;"></div>
+
+        <input type="text" id="searchInput" class="search-input" placeholder="🔍 搜尋名稱或位置..." onkeyup="filterData()">
+
+        <div id="listArea"></div>
+      </div>
+    </div>
+
+    <div id="systemStatus">🔴 載入中...</div>
+
+    <script>
+      var allFoodData = [];
+      var currentUserCode = ""; 
+
+      // ------------------------------------
+      // 👇 您可以在這裡修改「警告天數」
+      // 目前設定：剩 7 天會變黃色。改成 3 就會剩 3 天才變色。
+      const WARNING_DAYS = 7; 
+      // ------------------------------------
+
+      window.onload = function() {
+        try {
+          var savedCode = localStorage.getItem('mySpaceCode');
+          if (savedCode) {
+            verifyAndLogin(savedCode, true);
+          }
+          document.getElementById('systemStatus').innerHTML = "🟢 系統正常";
+          document.getElementById('systemStatus').style.color = "green";
+        } catch (e) {
+          document.getElementById('systemStatus').innerHTML = "🔴 錯誤: " + e.message;
+        }
+      };
+
+      // --- 登入與註冊 ---
+      function processLogin() {
+        var input = document.getElementById('spaceCodeInput').value.trim().toUpperCase();
+        if (!input) { alert("請輸入代碼"); return; }
+        
+        var btn = document.getElementById('btnLogin');
+        btn.innerText = "🔍 驗證中...";
+        btn.disabled = true;
+
+        verifyAndLogin(input, false);
+      }
+
+      function verifyAndLogin(code, isAutoLogin) {
+        google.script.run
+          .withSuccessHandler(function(isValid) {
+             var btn = document.getElementById('btnLogin');
+             btn.innerText = "🚀 登入空間";
+             btn.disabled = false;
+
+             if (isValid) {
+               currentUserCode = code;
+               localStorage.setItem('mySpaceCode', currentUserCode);
+               showApp();
+             } else {
+               if (!isAutoLogin) alert("❌ 無效的代碼！");
+               if (isAutoLogin) localStorage.removeItem('mySpaceCode');
+             }
+          })
+          .withFailureHandler(function(e) {
+             alert("連線錯誤: " + e);
+             document.getElementById('btnLogin').disabled = false;
+          })
+          .checkCodeValid(code);
+      }
+
+      function processRegister() {
+        var btn = document.getElementById('btnCreate');
+        btn.innerText = "⏳ 註冊中...";
+        btn.disabled = true;
+
+        google.script.run
+          .withSuccessHandler(function(newCode) {
+             document.getElementById('spaceCodeInput').value = newCode;
+             alert("🎉 註冊成功！代碼: " + newCode);
+             currentUserCode = newCode;
+             localStorage.setItem('mySpaceCode', currentUserCode);
+             showApp();
+             btn.innerText = "🎲 產生新代碼";
+             btn.disabled = false;
+          })
+          .withFailureHandler(function(e) {
+             alert("產生失敗: " + e);
+             btn.disabled = false;
+          })
+          .createNewSpace();
+      }
+
+      function showApp() {
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('appContainer').style.display = 'block';
+        document.getElementById('displayCode').innerText = currentUserCode;
+        loadData(); 
+      }
+
+      function logout() {
+        localStorage.removeItem('mySpaceCode');
+        currentUserCode = "";
+        allFoodData = [];
+        
+        document.getElementById('appContainer').style.display = 'none';
+        document.getElementById('loginOverlay').style.display = 'flex';
+        
+        document.getElementById('spaceCodeInput').value = "";
+        document.getElementById('listArea').innerHTML = "";
+        document.getElementById('searchInput').value = ""; 
+      }
+
+      function copyCode() {
+        navigator.clipboard.writeText(currentUserCode);
+        alert("已複製！");
+      }
+
+      // --- 資料操作 ---
+      function log(msg) { document.getElementById('statusLog').innerText = msg; }
+      function handleFileSelect() {
+        var file = document.getElementById('fileInput').files[0];
+        if (file) {
+          var reader = new FileReader();
+          reader.onload = function(e) {
+            document.getElementById('imgPreview').src = e.target.result;
+            document.getElementById('previewBox').style.display = 'block';
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      function loadData() {
+        log("讀取中...");
+        google.script.run.withSuccessHandler(function(data) {
+             allFoodData = data || [];
+             renderList(allFoodData);
+             log("");
+          }).withFailureHandler(function(e){ log("錯誤: " + e); }).getFoodListV3(currentUserCode); 
+      }
+
+      function saveData() {
+        var name = document.getElementById('inName').value;
+        var loc = document.getElementById('inLoc').value;
+        var date = document.getElementById('inDate').value;
+        var fileInput = document.getElementById('fileInput');
+        if (!name || !date) { alert("請輸入名稱和日期"); return; }
+        
+        var send = function(base64) {
+             log("儲存中...");
+             google.script.run.withSuccessHandler(function(){
+               log("成功！"); 
+               setTimeout(function(){ log(""); }, 2000);
+               document.getElementById('inName').value = "";
+               document.getElementById('inLoc').value = "";
+               document.getElementById('inDate').value = "";
+               document.getElementById('fileInput').value = "";
+               document.getElementById('previewBox').style.display = 'none';
+               document.getElementById('searchInput').value = ""; 
+               loadData(); 
+            }).addFoodV3(currentUserCode, name, loc, date, base64);
+        };
+        if (fileInput.files.length > 0) compressImage(fileInput.files[0], send);
+        else send(null);
+      }
+      
+      function deleteItem(rowId, name) {
+        if (!confirm("刪除「" + name + "」？")) return;
+        log("刪除中...");
+        google.script.run.withSuccessHandler(function() {
+             log("已刪除");
+             setTimeout(function() {
+                 loadData();
+                 document.getElementById('searchInput').value = "";
+             }, 500);
+          }).deleteFood(rowId);
+      }
+
+      function filterData() {
+        var keyword = document.getElementById('searchInput').value.toLowerCase();
+        
+        var filtered = allFoodData.filter(function(item) {
+           return item.name.toString().toLowerCase().includes(keyword) || 
+                  item.location.toString().toLowerCase().includes(keyword);
+        });
+        
+        renderList(filtered);
+      }
+      
+      function renderList(data) {
+        var listArea = document.getElementById('listArea');
+        var html = "";
+        if (!data || data.length === 0) {
+          listArea.innerHTML = "<p style='text-align:center; color:#999;'>暫無資料</p>";
+          return;
+        }
+        data.sort((a,b) => new Date(a.date) - new Date(b.date));
+        
+        data.forEach(function(item) {
+           var imgHtml = (item.imgUrl && item.imgUrl.startsWith('http')) 
+             ? `<img src="${item.imgUrl}" class="card-img">` : `<div class="card-img" style="display:flex;justify-content:center;align-items:center;">無圖</div>`;
+           
+           // 自動計算天數 (每天打開都會變)
+           var today = new Date(); today.setHours(0,0,0,0);
+           var targetDate = new Date(item.date);
+           var diffDays = Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24));
+           
+           var statusClass = "bg-green"; var statusText = "新鮮";
+           
+           // 判斷邏輯
+           if (diffDays < 0) { 
+               statusClass = "bg-red"; statusText = "過期 " + Math.abs(diffDays) + " 天"; 
+           } else if (diffDays <= WARNING_DAYS) { // 使用上方的設定值
+               statusClass = "bg-yellow"; statusText = "剩 " + diffDays + " 天"; 
+           }
+
+           html += `
+             <div class="card">
+               ${imgHtml}
+               <div class="card-info">
+                 <div style="font-weight:bold;">${item.name}</div>
+                 <div style="font-size:14px; color:#666;">📍 ${item.location}</div>
+                 <div class="tag ${statusClass}">${statusText}</div>
+                 <div style="font-size:12px; color:#aaa;">${item.date}</div>
+               </div>
+               <button onclick="deleteItem(${item.rowId}, '${item.name}')" style="width:30px; background:none; color:red; border:1px solid #eee;">🗑</button>
+             </div>`;
+        });
+        listArea.innerHTML = html;
+      }
+
+      function compressImage(file, callback) {
+        var reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = function(event) {
+          var img = new Image();
+          img.src = event.target.result;
+          img.onload = function() {
+            var canvas = document.createElement('canvas');
+            var ctx = canvas.getContext('2d');
+            var maxWidth = 500; var width = img.width; var height = img.height;
+            if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+            canvas.width = width; canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+            callback(canvas.toDataURL('image/jpeg', 0.5).split(',')[1]);
+          };
+        };
+      }
+    </script>
+  </body>
+</html>
